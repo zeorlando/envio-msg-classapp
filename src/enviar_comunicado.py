@@ -1,11 +1,4 @@
 """
-- tenho uma lista com os alunos que devem receber as msgs
-
-- verificar se a mensagem tem anexo
-- verificar se é pra todos
-
-***
-
 msg1 - para todos com anexo (2 anexos)
 msg2 - específico com anexo, aqui varia o RM (1 anexo)
 msg3 - categorizado(inf ao 1 ano) sem anexo
@@ -22,11 +15,26 @@ msg13 - categorizado(6 ao 9 ano) sem anexo
 msg14 - para todos sem anexo
 msg15 - para todos com anexo (5 anexos)
 
-colocar as turmas de cada msg em uma lista, na chave  turmas
+ESTRUTURA DO DICIONÁRIO DE MENSAGENS
 
-duas funções de envio: uma com anexo e outra sem anexo
+{
+    'msg':{
+        'título':'valor_titulo', //string
+        'conteudo':'valor_msg', //string
+        'especifico':1, // boolean
+        'grupo':lita_com_turmas, //list
+        'anexo':lista_com_anexos, //list
+        'mime':lista_com_mime, //list 
+    }
+}
 
-dicionário de listas com as segmentações (dos categorizados)
+- grupo -> verificar quais turmas estão na lista para poder filtrar da planilha(xlsx)
+rms = df[df['turma'].isin(lista_turmas)]['rm'].tolist()
+lista_turmas é o campo grupo do dicionário
+
+
+- anexo -> dois estados -> lista vazia ou lista com >= 1 elementos
+
 
 """
 
@@ -34,6 +42,7 @@ import json
 import os
 import pandas as pd
 import requests
+from string import Template
 
 
 token = os.path.join('..','config','token.txt')
@@ -69,7 +78,7 @@ try:
     # for index, row in df.iterrows():
     #     lista_alunos.append(row.to_dict())
     lista_rms = df['rm'].tolist() #transforma os RMs em uma lista 
-    str_rms = [str(rm) for rm in lista_rms] #passa os itens da lista para str
+    str_rms_todos = [str(rm) for rm in lista_rms] #passa os itens da lista para str
 except IOError as e:
     print(f'{e} - Arquivo não encontrado')
 
@@ -80,83 +89,96 @@ try:
 except IOError as e:
     print(f'{e} - Arquivo não encontrado') 
 
-# função para enviar mensagem para todos da lista - mensagens COM anexo
-def envia_msg_para_todos_com_anexo(mensagem, titulo):
-    msg_dic = valores_dic[mensagem]
-    arquivo_conteudo = os.path.join(caminho_mensagens, f'{mensagem}.txt') #caminho msg
-    with open(os.path.join(arquivo_conteudo), "r", encoding='utf-8') as arquivo:
-        msg_class = arquivo.read()
-        metadata = {
-            "metadata": json.dumps({ 
-                "messageData": {
-                "subject": str(titulo),
-                "content": msg_class,
-                "type": "comunicado",
-                "noReply": True,
-                "recipients": {
-                    "eids": str_rms  
-                }
-                }
-            })    
-        }
-        files = []
-        for nome, tipo in zip(msg_dic["anexos"], msg_dic["mime"]):
+
+def anexo(mensagem):
+    files = []
+    for nome, tipo in zip(valores_dic[mensagem]["anexo"], valores_dic[mensagem]["mime"]):
             caminho_anexo_msg = os.path.join(caminho_anexos, nome)
             files.append(
                 ("files", (nome, open(caminho_anexo_msg, "rb"), tipo))
             )
-    resposta = requests.post(url_com_anexo, headers=headers_com_anexo, data=metadata, files=files)   
-    if resposta.status_code == 201:
-        print("Mensagem enviada com sucesso!")
-        print("Resposta:", resposta.json())
-    else:
-        print(f"Falha ao enviar mensagem. Status code: {resposta.status_code}")
-        print("Detalhes:", resposta.json()) 
-    return resposta
+    return files
 
-# função para enviar mensagem para todos da lista - mensagens SEM anexo
-def envia_msg_para_todos_sem_anexo(mensagem, titulo):
+
+def gera_metadata(titulo, msg_class, rms_selecionados):
+    metadata = {
+        "metadata": json.dumps({ 
+            "messageData": {
+            "subject": str(titulo),
+            "content": msg_class,
+            "type": "comunicado",
+            "noReply": True,
+            "recipients": {
+                "eids": rms_selecionados    
+            }
+            }
+        })    
+    }
+    return metadata
+
+
+def gera_dados(titulo, msg_class, rms_selecionados):
+    dados = {
+            "messageData": {
+                "subject": str(titulo),
+                "content": msg_class, #conteudo msg
+                "type": "comunicado",
+                "tags": [
+                    "1"
+                ],
+                "noReply": True,
+                "label": "label",
+                "recipients": {
+                    "eids":
+                        rms_selecionados
+                }
+            }
+            }
+    return dados
+
+def envia_msg(mensagem):
+    lista_resposta = []
+    titulo = valores_dic[mensagem]['titulo']
+    lista_anexo = valores_dic[mensagem]['anexo']
+    especifico = valores_dic[mensagem]['especifico']
     arquivo_conteudo = os.path.join(caminho_mensagens, f'{mensagem}.txt') #caminho msg
+    lista_turmas = valores_dic[mensagem]['grupo']
+    rms = df[df['turma'].isin(lista_turmas)]['rm'].tolist()
+    str_rms_espec = [str(rm) for rm in rms]
+    rms_selecionados = str_rms_todos if 'todos' in valores_dic[mensagem]['grupo'] else str_rms_espec
+    int_rms_selecionados = [int(rm) for rm in rms_selecionados]
+    
     with open(os.path.join(arquivo_conteudo), "r", encoding='utf-8') as arquivo:
         msg_class = arquivo.read()
-        dados = {
-                    "messageData": {
-                        "subject": str(titulo),
-                        "content": msg_class, #conteudo msg
-                        "type": "comunicado",
-                        "tags": [
-                            "1"
-                        ],
-                        "noReply": True,
-                        "label": "label",
-                        "recipients": {
-                            "eids":
-                                str_rms    
-                        }
-                    }
-                }
-    return print(dados)
-    # resposta = requests.post(url_sem_anexo, json=dados, headers=headers_sem_anexo)
-    # return resposta 
-    #pass
 
+    if especifico:
+        for rm in int_rms_selecionados:
+            nome_df = df[df['rm'] == rm]['nome'].values[0]
+            rm_df = df[df['rm'] == rm]['rm'].values[0]
+            msg_trocada = Template(msg_class).substitute(nome = nome_df, rm = rm_df)
+            if lista_anexo:
+                resposta =  requests.post(url_com_anexo, headers=headers_com_anexo, 
+                                    data=gera_metadata(titulo, msg_trocada, [str(rm)]), 
+                                    files=anexo(mensagem))
+                lista_resposta.append(resposta)
+            else:
+                resposta = requests.post(url_sem_anexo, json=gera_dados(titulo, msg_trocada, [str(rm)]), 
+                                    headers=headers_sem_anexo)
+                lista_resposta.append(resposta)
+    else:
+        if lista_anexo:
+            resposta = requests.post(url_com_anexo, headers=headers_com_anexo, 
+                                 data=gera_metadata(titulo, msg_class, rms_selecionados), 
+                                 files=anexo(mensagem))
+            lista_resposta.append(resposta)
+        else:
+            resposta = requests.post(url_sem_anexo, json=gera_dados(titulo, msg_class, rms_selecionados), 
+                                 headers=headers_sem_anexo) 
+            lista_resposta.append(resposta)
+    return lista_resposta
 
 # percorre o dicionário das mensagens
 for chave in range(len(chaves_msgs)):
     mensagem = chaves_msgs[chave]
-    titulo = valores_dic[chaves_msgs[chave]]['titulo']
-    if valores_dic[chaves_msgs[chave]]['para_todos'] == 1:
-        if valores_dic[chaves_msgs[chave]]['anexo'] == 1:
-            #envia_msg_para_todos_com_anexo(mensagem,titulo)
-            pass
-        else:
-            #envia_msg_para_todos_sem_anexo(mensagem,titulo)
-            pass
-    else:
-        if valores_dic[chaves_msgs[chave]]['anexo'] == 1:
-            print(f'{chaves_msgs[chave]} - específco com anexo')
-        else:
-            print(f'{chaves_msgs[chave]} - específico sem anexo')
-
-
-
+    envia_msg(mensagem)
+    
