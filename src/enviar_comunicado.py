@@ -62,7 +62,6 @@ try:
 except IOError as e:
     print(f'{e} - Arquivo não encontrado')
 
-#TODO verificar a questão do headers com anexo
 headers_sem_anexo = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {ler_token}"
@@ -73,10 +72,7 @@ headers_com_anexo = {
 }
 
 try:
-    # lista_alunos = []
     df = pd.read_excel(alunos)
-    # for index, row in df.iterrows():
-    #     lista_alunos.append(row.to_dict())
     lista_rms = df['rm'].tolist() #transforma os RMs em uma lista 
     str_rms_todos = [str(rm) for rm in lista_rms] #passa os itens da lista para str
 except IOError as e:
@@ -91,6 +87,7 @@ except IOError as e:
 
 
 def anexo(mensagem):
+    """criar lista de arquivos anexos"""
     files = []
     for nome, tipo in zip(valores_dic[mensagem]["anexo"], valores_dic[mensagem]["mime"]):
             caminho_anexo_msg = os.path.join(caminho_anexos, nome)
@@ -101,6 +98,7 @@ def anexo(mensagem):
 
 
 def gera_metadata(titulo, msg_class, rms_selecionados):
+    """cria estrutura para mensagem com anexo"""
     metadata = {
         "metadata": json.dumps({ 
             "messageData": {
@@ -118,10 +116,11 @@ def gera_metadata(titulo, msg_class, rms_selecionados):
 
 
 def gera_dados(titulo, msg_class, rms_selecionados):
+    """cria estrutura para mensagem sem anexo"""
     dados = {
             "messageData": {
                 "subject": str(titulo),
-                "content": msg_class, #conteudo msg
+                "content": msg_class,
                 "type": "comunicado",
                 "tags": [
                     "1"
@@ -137,6 +136,7 @@ def gera_dados(titulo, msg_class, rms_selecionados):
     return dados
 
 def envia_msg(mensagem):
+    """função que envia mensagem"""
     lista_resposta = []
     titulo = valores_dic[mensagem]['titulo']
     lista_anexo = valores_dic[mensagem]['anexo']
@@ -153,9 +153,8 @@ def envia_msg(mensagem):
 
     if especifico:
         for rm in int_rms_selecionados:
-            nome_df = df[df['rm'] == rm]['nome'].values[0]
-            rm_df = df[df['rm'] == rm]['rm'].values[0]
-            msg_trocada = Template(msg_class).substitute(nome = nome_df, rm = rm_df)
+            nome_df = df.loc[df['rm'] == rm, 'nome'].iloc[0]
+            msg_trocada = Template(msg_class).substitute(nome = nome_df, rm = rm)
             if lista_anexo:
                 resposta =  requests.post(url_com_anexo, headers=headers_com_anexo, 
                                     data=gera_metadata(titulo, msg_trocada, [str(rm)]), 
