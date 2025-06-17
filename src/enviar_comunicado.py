@@ -181,4 +181,3 @@ for chave in range(len(chaves_msgs)):
     # breakpoint()
     mensagem = chaves_msgs[chave]
     envia_msg(mensagem)
-    
