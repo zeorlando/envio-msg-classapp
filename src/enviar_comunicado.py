@@ -99,6 +99,7 @@ def anexo(mensagem):
 
 def gera_metadata(titulo, msg_class, rms_selecionados):
     """cria estrutura para mensagem com anexo"""
+    # breakpoint()
     metadata = {
         "metadata": json.dumps({ 
             "messageData": {
@@ -112,11 +113,13 @@ def gera_metadata(titulo, msg_class, rms_selecionados):
             }
         })    
     }
+
     return metadata
 
 
 def gera_dados(titulo, msg_class, rms_selecionados):
     """cria estrutura para mensagem sem anexo"""
+    # breakpoint()
     dados = {
             "messageData": {
                 "subject": str(titulo),
@@ -137,7 +140,7 @@ def gera_dados(titulo, msg_class, rms_selecionados):
 
 def envia_msg(mensagem):
     """função que envia mensagem"""
-    lista_resposta = []
+    # breakpoint()
     titulo = valores_dic[mensagem]['titulo']
     lista_anexo = valores_dic[mensagem]['anexo']
     especifico = valores_dic[mensagem]['especifico']
@@ -152,32 +155,30 @@ def envia_msg(mensagem):
         msg_class = arquivo.read()
 
     if especifico:
+        # breakpoint()
         for rm in int_rms_selecionados:
             nome_df = df.loc[df['rm'] == rm, 'nome'].iloc[0]
             msg_trocada = Template(msg_class).substitute(nome = nome_df, rm = rm)
             if lista_anexo:
-                resposta =  requests.post(url_com_anexo, headers=headers_com_anexo, 
+                resposta = requests.post(url_com_anexo, headers=headers_com_anexo, 
                                     data=gera_metadata(titulo, msg_trocada, [str(rm)]), 
                                     files=anexo(mensagem))
-                lista_resposta.append(resposta)
             else:
                 resposta = requests.post(url_sem_anexo, json=gera_dados(titulo, msg_trocada, [str(rm)]), 
                                     headers=headers_sem_anexo)
-                lista_resposta.append(resposta)
+        return resposta
     else:
         if lista_anexo:
-            resposta = requests.post(url_com_anexo, headers=headers_com_anexo, 
+            return requests.post(url_com_anexo, headers=headers_com_anexo, 
                                  data=gera_metadata(titulo, msg_class, rms_selecionados), 
                                  files=anexo(mensagem))
-            lista_resposta.append(resposta)
         else:
-            resposta = requests.post(url_sem_anexo, json=gera_dados(titulo, msg_class, rms_selecionados), 
+            return requests.post(url_sem_anexo, json=gera_dados(titulo, msg_class, rms_selecionados), 
                                  headers=headers_sem_anexo) 
-            lista_resposta.append(resposta)
-    return lista_resposta
 
 # percorre o dicionário das mensagens
 for chave in range(len(chaves_msgs)):
+    # breakpoint()
     mensagem = chaves_msgs[chave]
     envia_msg(mensagem)
     
